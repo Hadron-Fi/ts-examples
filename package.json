@@ -1,0 +1,26 @@
+{
+  "name": "hadron-examples",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Hadron AMM SDK usage examples",
+  "scripts": {
+    "init": "vitest run src/quickstart/01-initialize-pool.test.ts",
+    "read": "vitest run src/quickstart/02-read-pool-state.test.ts",
+    "write": "vitest run src/quickstart/03-write-pool-updates.test.ts",
+    "depth-curves": "vitest run src/simulations/01-depth-curves.test.ts",
+    "interp": "vitest run src/simulations/02-interpolation-comparison.test.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@hadron-fi/sdk": "latest",
+    "@solana/spl-token": "^0.4.0",
+    "@solana/web3.js": "^1.95.0",
+    "dotenv": "^17.3.1"
+  },
+  "devDependencies": {
+    "litesvm": "^0.5.0",
+    "typescript": "^5.4.0",
+    "vitest": "^4.0.18"
+  }
+}
