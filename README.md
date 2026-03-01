@@ -7,11 +7,23 @@ SDK usage examples for the [Hadron AMM](https://hadron.fi) on Solana.
 ```bash
 npm install
 
-# Create a pool on devnet (writes config to output/)
-npm run init
+# 1. Create a pool on devnet (writes config to output/)
+NETWORK=devnet WALLET=./wallet.json npm run init
 
-# Update pool parameters and swap
-npm run write
+# 2. Read pool state — midprice, spread, curves, vault balances
+NETWORK=devnet WALLET=./wallet.json npm run read
+
+# 3. Update midprice, spread, curves, and swap
+NETWORK=devnet WALLET=./wallet.json npm run write
+
+# 4. Configure spread triggers and swap at different spreads
+NETWORK=devnet WALLET=./wallet.json npm run spread
+
+# 5. Simulate depth curves across 21 inventory levels (local LiteSVM)
+npm run depth-curves        # → output/depth-curves.html
+
+# 6. Compare 5 interpolation modes on the same control points (local LiteSVM)
+npm run interp              # → output/interp-comparison.html
 ```
 
 ## Key Concepts
@@ -37,6 +49,7 @@ Hadron pools expose **5 levers** that market makers use to control pricing:
 | 01 | [Initialize Pool](src/quickstart/01-initialize-pool.test.ts) | Create mints, initialize a pool, set price + risk curves, deposit liquidity, update midprice | `npm run init` |
 | 02 | [Read Pool State](src/quickstart/02-read-pool-state.test.ts) | Load an existing pool and print midprice, spread, active curves, vault balances, and oracle state | `npm run read` |
 | 03 | [Write Pool Updates](src/quickstart/03-write-pool-updates.test.ts) | `updateMidprice`, `updateBaseSpread`, `submitCurveUpdates`, and swaps on a live devnet pool | `npm run write` |
+| 04 | [Spread Config](src/quickstart/04-spread-config.test.ts) | Initialize a spread config, add/update/remove spread triggers, and swap at different spread widths | `npm run spread` |
 
 ### Simulations — local LiteSVM
 

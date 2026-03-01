@@ -23,6 +23,7 @@ import { Keypair, PublicKey } from "@solana/web3.js";
 import {
   Hadron,
   toQ32,
+  fromQ32,
   Interpolation,
   CurveType,
   CurveUpdateOpKind,
@@ -144,40 +145,48 @@ describe("Write pool updates", () => {
     //    These are staged but NOT yet applied to the active curve.
     //    They will be applied when the next swap executes.
     //
-    //    Here we edit all 3 bid price curve points to tighten
-    //    the spread at depth.
+    //    Here we edit 3 bid price curve points to tighten
+    //    the spread at depth. We read the current curve to get
+    //    the exact amountIn values, then only change priceFactors.
     // ------------------------------------------------------------------
     logHeader("submitCurveUpdates");
 
+    const curves = pool.getActiveCurves();
+    const bidPts = curves.priceBid.points;
+    logInfo("Current bid curve:", `${bidPts.length} points`);
+    for (let i = 0; i < Math.min(3, bidPts.length); i++) {
+      logInfo(`  [${i}]`, `amountIn=${bidPts[i].amountIn} factor=${fromQ32(bidPts[i].priceFactorQ32).toFixed(6)}`);
+    }
+
     const ops: CurveUpdateOp[] = [
-      // Edit point index 0 (0 X) — shift origin factor to 1.001
+      // Edit point 0 — shift origin factor to 1.001
       {
         curveType: CurveType.PriceBid,
         opKind: CurveUpdateOpKind.Edit,
         pointIndex: 0,
         interpolation: Interpolation.Linear,
-        amountIn: 0n,
+        amountIn: bidPts[0].amountIn,
         priceFactorQ32: toQ32(1.001),
         params: new Uint8Array(4),
       },
-      // Edit point index 1 (500 X) — tighten from 0.995 to 0.997
+      // Edit point 1 — tighten factor to 0.9995
       {
         curveType: CurveType.PriceBid,
         opKind: CurveUpdateOpKind.Edit,
         pointIndex: 1,
         interpolation: Interpolation.Linear,
-        amountIn: 500_000_000n,
-        priceFactorQ32: toQ32(0.997),
+        amountIn: bidPts[1].amountIn,
+        priceFactorQ32: toQ32(0.9995),
         params: new Uint8Array(4),
       },
-      // Edit point index 2 (1,000 X) — tighten from 0.98 to 0.99
+      // Edit point 2 — tighten factor to 0.999
       {
         curveType: CurveType.PriceBid,
         opKind: CurveUpdateOpKind.Edit,
         pointIndex: 2,
         interpolation: Interpolation.Linear,
-        amountIn: 1_000_000_000n,
-        priceFactorQ32: toQ32(0.99),
+        amountIn: bidPts[2].amountIn,
+        priceFactorQ32: toQ32(0.999),
         params: new Uint8Array(4),
       },
     ];
@@ -186,7 +195,7 @@ describe("Write pool updates", () => {
       pool.submitCurveUpdates(authority.publicKey, ops),
       [authority]
     );
-    logTx("Submit 3 curve update ops (edit x3)", sig);
+    logTx(`Submit ${ops.length} curve update ops (edit x${ops.length})`, sig);
     logInfo("Note:", "Updates are queued — they apply on the next swap.");
 
     // ------------------------------------------------------------------

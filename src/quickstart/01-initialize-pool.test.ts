@@ -76,8 +76,14 @@ describe("Initialize pool with price and risk curves", () => {
     //      Bid: < 1.0 = worse price for seller (amountIn in X atoms)
     //      Ask: > 1.0 = worse price for buyer (amountIn in Y atoms)
     //
-    //    To get symmetric USD depth, ask amountIn values are scaled
-    //    by midprice: 500 base-equiv = 500 * 150 = 75,000 Y tokens.
+    //    Points define a depth curve with a kink at 750 X:
+    //    smooth degradation up to 500 X, then +50 bps step.
+    //
+    //    A 50 bps kink at point 5 (750 X) steepens the curve beyond
+    //    that threshold — protecting liquidity at larger trade sizes.
+    //
+    //    Ask amountIn values are scaled by midprice for symmetric
+    //    USD depth: e.g. 500 base-equiv = 500 * 150 = 75,000 Y.
     // ---------------------------------------------------------------
     logHeader("Set price curves");
     sig = await h.sendIx(
@@ -86,14 +92,22 @@ describe("Initialize pool with price and risk curves", () => {
         defaultInterpolation: Interpolation.Linear,
         slot: 0,
         points: [
-          { amountIn: 0n, priceFactor: 1.0 },    // at midprice
-          { amountIn: 500_000_000n, priceFactor: 0.995 },  // -0.5% at 500 X
-          { amountIn: 1_000_000_000n, priceFactor: 0.98 },   // -2% at 1,000 X
+          { amountIn: 0n,               priceFactor: 1.0 },       // midprice
+          { amountIn: 100_000_000n,     priceFactor: 0.99933 },   // 100 X
+          { amountIn: 250_000_000n,     priceFactor: 0.99867 },   // 250 X
+          { amountIn: 500_000_000n,     priceFactor: 0.99794 },   // 500 X
+          { amountIn: 750_000_000n,     priceFactor: 0.99244 },   // 750 X   ← +50 bps kink
+          { amountIn: 1_000_000_000n,   priceFactor: 0.99206 },   // 1,000 X
+          { amountIn: 1_500_000_000n,   priceFactor: 0.99149 },   // 1,500 X
+          { amountIn: 2_000_000_000n,   priceFactor: 0.99106 },   // 2,000 X
+          { amountIn: 2_500_000_000n,   priceFactor: 0.99073 },   // 2,500 X
+          { amountIn: 3_000_000_000n,   priceFactor: 0.99045 },   // 3,000 X
+          { amountIn: 4_000_000_000n,   priceFactor: 0.99000 },   // 4,000 X  (-100 bps)
         ],
       }),
       [authority]
     );
-    logTx("Price curve (bid)", sig);
+    logTx("Price curve (bid — 11 points, 11 points, kinked)", sig);
 
     sig = await h.sendIx(
       pool.setCurve(authority.publicKey, {
@@ -101,21 +115,32 @@ describe("Initialize pool with price and risk curves", () => {
         defaultInterpolation: Interpolation.Linear,
         slot: 0,
         points: [
-          { amountIn: 0n, priceFactor: 1.0 },    // at midprice
-          { amountIn: 75_000_000_000n, priceFactor: 1.005 },  // +0.5% at 75k Y (≈500 base-equiv)
-          { amountIn: 150_000_000_000n, priceFactor: 1.02 },   // +2% at 150k Y (≈1,000 base-equiv)
+          { amountIn: 0n,                 priceFactor: 1.0 },       // midprice
+          { amountIn: 15_000_000_000n,    priceFactor: 1.00067 },   // 15k Y  ≈ 100 X-equiv
+          { amountIn: 37_500_000_000n,    priceFactor: 1.00133 },   // 37.5k  ≈ 250 X-equiv
+          { amountIn: 75_000_000_000n,    priceFactor: 1.00206 },   // 75k    ≈ 500 X-equiv
+          { amountIn: 112_500_000_000n,   priceFactor: 1.00756 },   // 112.5k ≈ 750 X  ← +50 bps kink
+          { amountIn: 150_000_000_000n,   priceFactor: 1.00794 },   // 150k   ≈ 1,000 X-equiv
+          { amountIn: 225_000_000_000n,   priceFactor: 1.00851 },   // 225k   ≈ 1,500 X-equiv
+          { amountIn: 300_000_000_000n,   priceFactor: 1.00894 },   // 300k   ≈ 2,000 X-equiv
+          { amountIn: 375_000_000_000n,   priceFactor: 1.00928 },   // 375k   ≈ 2,500 X-equiv
+          { amountIn: 450_000_000_000n,   priceFactor: 1.00955 },   // 450k   ≈ 3,000 X-equiv
+          { amountIn: 600_000_000_000n,   priceFactor: 1.01000 },   // 600k   ≈ 4,000 X-equiv (+100 bps)
         ],
       }),
       [authority]
     );
-    logTx("Price curve (ask)", sig);
+    logTx("Price curve (ask — 11 points, 11 points, kinked)", sig);
 
     // ---------------------------------------------------------------
     // 4. Set risk curves (bid + ask)
     //
     //    Adjusts pricing based on vault inventory imbalance.
     //    pctBase: 0.0 = vault empty, 1.0 = vault full.
-    //    priceFactor < 1.0 penalizes trades that worsen imbalance.
+    //
+    //    Bid and ask are mirrors — they shift the effective fair price
+    //    in parallel to attract rebalancing flow. At extremes, the
+    //    spread also widens to protect against one-sided depletion.
     // ---------------------------------------------------------------
     logHeader("Set risk curves");
     sig = await h.sendIx(
@@ -124,10 +149,11 @@ describe("Initialize pool with price and risk curves", () => {
         defaultInterpolation: Interpolation.Linear,
         slot: 0,
         points: [
-          { pctBase: 0.0, priceFactor: 0.90 },  // vault empty  -> 10% penalty
-          { pctBase: 0.25, priceFactor: 0.97 },   // low inv      -> 3% penalty
-          { pctBase: 0.5, priceFactor: 1.0 },    // balanced     -> no adjustment
-          { pctBase: 1.0, priceFactor: 1.0 },    // full         -> no adjustment
+          { pctBase: 0.0, priceFactor: 1.005 },   // low X  → raise bid to attract sellers
+          { pctBase: 0.25, priceFactor: 1.0025 },
+          { pctBase: 0.5, priceFactor: 1.0 },     // balanced → no adjustment
+          { pctBase: 0.75, priceFactor: 0.9975 },
+          { pctBase: 1.0, priceFactor: 0.990 },   // full X → lower bid to discourage more
         ],
       }),
       [authority]
@@ -140,10 +166,11 @@ describe("Initialize pool with price and risk curves", () => {
         defaultInterpolation: Interpolation.Linear,
         slot: 0,
         points: [
-          { pctBase: 0.0, priceFactor: 1.0 },    // Y empty      -> no adjustment
-          { pctBase: 0.5, priceFactor: 1.0 },     // balanced     -> no adjustment
-          { pctBase: 0.75, priceFactor: 0.97 },    // Y filling up -> 3% penalty
-          { pctBase: 1.0, priceFactor: 0.90 },    // Y full       -> 10% penalty
+          { pctBase: 0.0, priceFactor: 0.990 },   // low X  → lower ask to discourage buying
+          { pctBase: 0.25, priceFactor: 0.9975 },
+          { pctBase: 0.5, priceFactor: 1.0 },     // balanced → no adjustment
+          { pctBase: 0.75, priceFactor: 1.0025 },
+          { pctBase: 1.0, priceFactor: 1.005 },   // full X → raise ask to attract buyers
         ],
       }),
       [authority]
@@ -159,18 +186,19 @@ describe("Initialize pool with price and risk curves", () => {
 
     const userAtaX = await h.createAta(authority.publicKey, mintX.publicKey);
     const userAtaY = await h.createAta(authority.publicKey, mintY.publicKey);
-    await h.mintTo(mintX.publicKey, userAtaX, 10_000_000_000n);
-    await h.mintTo(mintY.publicKey, userAtaY, 10_000_000_000n);
+    await h.mintTo(mintX.publicKey, userAtaX, 10_000_000_000n);           // 10k X
+    await h.mintTo(mintY.publicKey, userAtaY, 1_500_000_000_000n);        // 1.5M Y
 
+    // 50/50 value deposit: 5,000 X ($750k) + 750,000 Y ($750k)
     sig = await h.sendIx(
       pool.deposit(authority.publicKey, {
-        amountX: 5_000_000_000n, // 5,000 tokens each side
-        amountY: 5_000_000_000n,
+        amountX: 5_000_000_000n,       // 5,000 X
+        amountY: 750_000_000_000n,     // 750,000 Y  (= 5,000 base-equiv at mid $150)
         expiration: Math.floor(Date.now() / 1000) + 3600,
       }),
       [authority]
     );
-    logTx("Deposit 5,000 X + 5,000 Y", sig);
+    logTx("Deposit 5,000 X + 750,000 Y (50/50 value)", sig);
 
     // ---------------------------------------------------------------
     // 6. Update the midprice oracle

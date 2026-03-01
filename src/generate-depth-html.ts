@@ -46,38 +46,56 @@ export const DEFAULT_CONFIG: PoolConfig = {
   midprice: 150.0,
   decimalsX: 6,
   decimalsY: 6,
-  totalValueUsd: 3_000_000,
+  totalValueUsd: 1_500_000,
   priceCurves: {
     bid: {
       points: [
         { volume: 0, priceFactor: 1.0 },
-        { volume: 500, priceFactor: 0.995 },
-        { volume: 1000, priceFactor: 0.98 },
+        { volume: 100, priceFactor: 0.99933 },
+        { volume: 250, priceFactor: 0.99867 },
+        { volume: 500, priceFactor: 0.99794 },
+        { volume: 750, priceFactor: 0.99244 },    // +50 bps kink
+        { volume: 1000, priceFactor: 0.99206 },
+        { volume: 1500, priceFactor: 0.99149 },
+        { volume: 2000, priceFactor: 0.99106 },
+        { volume: 2500, priceFactor: 0.99073 },
+        { volume: 3000, priceFactor: 0.99045 },
+        { volume: 4000, priceFactor: 0.99 },
       ],
     },
     ask: {
       points: [
         { volume: 0, priceFactor: 1.0 },
-        { volume: 75000, priceFactor: 1.005 },
-        { volume: 150000, priceFactor: 1.02 },
+        { volume: 15000, priceFactor: 1.00067 },
+        { volume: 37500, priceFactor: 1.00133 },
+        { volume: 75000, priceFactor: 1.00206 },
+        { volume: 112500, priceFactor: 1.00756 },  // +50 bps kink
+        { volume: 150000, priceFactor: 1.00794 },
+        { volume: 225000, priceFactor: 1.00851 },
+        { volume: 300000, priceFactor: 1.00894 },
+        { volume: 375000, priceFactor: 1.00928 },
+        { volume: 450000, priceFactor: 1.00955 },
+        { volume: 600000, priceFactor: 1.01 },
       ],
     },
   },
   riskCurves: {
     bid: {
       points: [
-        { pctBase: 0.0, priceFactor: 0.9 },
-        { pctBase: 0.25, priceFactor: 0.97 },
+        { pctBase: 0.0, priceFactor: 1.005 },
+        { pctBase: 0.25, priceFactor: 1.0025 },
         { pctBase: 0.5, priceFactor: 1.0 },
-        { pctBase: 1.0, priceFactor: 1.0 },
+        { pctBase: 0.75, priceFactor: 0.9975 },
+        { pctBase: 1.0, priceFactor: 0.990 },
       ],
     },
     ask: {
       points: [
-        { pctBase: 0.0, priceFactor: 1.0 },
+        { pctBase: 0.0, priceFactor: 0.990 },
+        { pctBase: 0.25, priceFactor: 0.9975 },
         { pctBase: 0.5, priceFactor: 1.0 },
-        { pctBase: 0.75, priceFactor: 0.97 },
-        { pctBase: 1.0, priceFactor: 0.9 },
+        { pctBase: 0.75, priceFactor: 1.0025 },
+        { pctBase: 1.0, priceFactor: 1.005 },
       ],
     },
   },

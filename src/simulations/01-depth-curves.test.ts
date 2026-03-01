@@ -33,6 +33,7 @@ import {
 import {
   Hadron,
   toQ32,
+  fromQ32,
   Interpolation,
   Side,
   getFeeConfigAddress,
@@ -50,7 +51,6 @@ import {
   type PoolConfig,
   type AnimationFrame,
   type RiskPoint,
-  DEFAULT_CONFIG,
   generateDepthHtml,
 } from "../generate-depth-html";
 
@@ -404,7 +404,70 @@ function collectRiskData(
 
 describe("Simulate depth curves", () => {
   it("generates depth visualization from pool config", async () => {
-    const config: PoolConfig = DEFAULT_CONFIG;
+    // ------------------------------------------------------------------
+    // Load pool from devnet
+    // ------------------------------------------------------------------
+    const configPath = path.resolve(__dirname, "../../output/pool-config.json");
+    if (!fs.existsSync(configPath)) {
+      throw new Error(
+        "output/pool-config.json not found. Run 'npm run init' first."
+      );
+    }
+
+    const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+    const poolJson = Array.isArray(raw) ? raw[raw.length - 1] : raw;
+    const poolAddress = new PublicKey(poolJson.poolAddress);
+
+    const rpcUrl = process.env.RPC_URL || "https://api.devnet.solana.com";
+    const devnetConn = new Connection(rpcUrl, "confirmed");
+
+    logHeader("Loading pool from devnet");
+    logInfo("Pool:", poolAddress.toBase58());
+
+    const devnetPool = await Hadron.load(devnetConn, poolAddress);
+    const midprice = devnetPool.getMidprice();
+    const curves = devnetPool.getActiveCurves();
+
+    const config: PoolConfig = {
+      midprice,
+      decimalsX: 6,
+      decimalsY: 6,
+      totalValueUsd: midprice * 10_000,
+      priceCurves: {
+        bid: {
+          points: curves.priceBid.points.map((pt) => ({
+            volume: Number(pt.amountIn) / 1e6,
+            priceFactor: fromQ32(pt.priceFactorQ32),
+          })),
+        },
+        ask: {
+          points: curves.priceAsk.points.map((pt) => ({
+            volume: Number(pt.amountIn) / 1e6,
+            priceFactor: fromQ32(pt.priceFactorQ32),
+          })),
+        },
+      },
+      riskCurves: {
+        bid: {
+          points: curves.riskBid.points.map((pt) => ({
+            pctBase: fromQ32(pt.amountIn),
+            priceFactor: fromQ32(pt.priceFactorQ32),
+          })),
+        },
+        ask: {
+          points: curves.riskAsk.points.map((pt) => ({
+            pctBase: fromQ32(pt.amountIn),
+            priceFactor: fromQ32(pt.priceFactorQ32),
+          })),
+        },
+      },
+    };
+
+    logInfo("Midprice:", midprice.toFixed(4));
+    logInfo("Price Bid:", `${curves.priceBid.numPoints} points`);
+    logInfo("Price Ask:", `${curves.priceAsk.numPoints} points`);
+    logInfo("Risk Bid:", `${curves.riskBid.numPoints} points`);
+    logInfo("Risk Ask:", `${curves.riskAsk.numPoints} points`);
 
     logHeader("Setting up LiteSVM");
 
@@ -432,8 +495,6 @@ describe("Simulate depth curves", () => {
 
     // Pull fee config from devnet and inject into LiteSVM
     const [feeConfigPda] = getFeeConfigAddress();
-    const rpcUrl = process.env.RPC_URL || "https://api.devnet.solana.com";
-    const devnetConn = new Connection(rpcUrl, "confirmed");
     const feeConfigAcct = await devnetConn.getAccountInfo(feeConfigPda);
     if (!feeConfigAcct) throw new Error("Fee config not found on devnet");
 
@@ -464,8 +525,8 @@ describe("Simulate depth curves", () => {
     // Simulation parameters
     // ---------------------------------------------------------------
     const inventorySteps = 21;
-    const probePointsPerSide = 25;
-    const probeVolumeMax = 900; // max volume in base tokens
+    const probePointsPerSide = 50;
+    const probeVolumeMax = 3500; // max volume in base tokens
 
     logHeader("Collecting depth frames");
     logInfo(
