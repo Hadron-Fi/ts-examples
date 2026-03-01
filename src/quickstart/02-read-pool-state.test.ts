@@ -51,7 +51,7 @@ describe("Read pool state", () => {
     if (!fs.existsSync(configPath)) {
       throw new Error(
         "output/pool-config.json not found. Run test 01 on devnet first:\n" +
-          "  npm run init"
+        "  npm run init"
       );
     }
 
@@ -82,14 +82,14 @@ describe("Read pool state", () => {
     // ------------------------------------------------------------------
     logHeader("Oracle");
     const midprice = pool.getMidprice();
-    const spread = pool.getBaseSpread();
+    const spread = pool.getSpreadFactor();
     logInfo("Midprice:", midprice.toFixed(6));
-    logInfo("Base Spread:", `${spread.toFixed(8)} (${(spread * 10000).toFixed(2)} bps)`);
+    logInfo("Spread Factor:", `${spread.toFixed(8)} (${((1 - spread) * 10000).toFixed(2)} bps)`);
     logInfo("Sequence:", pool.oracle.sequence.toString());
     logInfo("Last Update Slot:", pool.oracle.lastUpdateSlot.toString());
 
     // ------------------------------------------------------------------
-    // Active curve slots
+    // Active curve slots - for prefabs
     // ------------------------------------------------------------------
     logHeader("Active Curve Slots");
     const slots = pool.getActiveCurveSlots();

@@ -24,6 +24,7 @@ import {
   Hadron,
   toQ32,
   fromQ32,
+  spreadBpsToQ32,
   Interpolation,
   CurveType,
   CurveUpdateOpKind,
@@ -114,13 +115,13 @@ describe("Write pool updates", () => {
 
     // ------------------------------------------------------------------
     // 2. updateBaseSpread — set a 10 bps base spread
-    //    baseSpreadQ32 is a discount factor: 1.0 = no spread.
-    //    10 bps = toQ32(1 - 10/10000) = toQ32(0.999)
+    //    spreadFactorQ32 is a discount factor: 1.0 = no spread.
+    //    10 bps → spreadBpsToQ32(10) = toQ32(0.999)
     // ------------------------------------------------------------------
     logHeader("updateBaseSpread");
     sig = await h.sendIx(
       pool.updateBaseSpread(authority.publicKey, {
-        baseSpreadQ32: toQ32(0.999),
+        spreadFactorQ32: spreadBpsToQ32(10),
       }),
       [authority]
     );
@@ -134,7 +135,7 @@ describe("Write pool updates", () => {
     sig = await h.sendIx(
       pool.updateMidpriceAndBaseSpread(authority.publicKey, {
         midpriceQ32: toQ32(158.0),
-        baseSpreadQ32: toQ32(0.9995),
+        spreadFactorQ32: spreadBpsToQ32(5),
       }),
       [authority]
     );
