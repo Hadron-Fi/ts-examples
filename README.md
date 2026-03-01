@@ -2,22 +2,56 @@
 
 SDK usage examples for the [Hadron AMM](https://hadron.fi) on Solana.
 
-## Quick Start
+## Setup
+
+### 1. Install dependencies
 
 ```bash
 npm install
+```
 
+### 2. Create a wallet and fund it on devnet
+
+```bash
+# Generate a new keypair
+solana-keygen new -o wallet.json
+
+# Fund it with devnet SOL (run a few times if needed)
+solana airdrop 5 --keypair wallet.json --url devnet
+```
+
+### 3. Configure environment
+
+Copy the example env file and edit if needed:
+
+```bash
+cp .env.example .env
+```
+
+The defaults work out of the box — they point to devnet with `./wallet.json`:
+
+```
+NETWORK=devnet
+WALLET=./wallet.json
+RPC_URL=https://api.devnet.solana.com
+```
+
+If you have a custom RPC endpoint (e.g. Helius, Triton), set `RPC_URL` in `.env`.
+
+## Quick Start
+
+```bash
 # 1. Create a pool on devnet (writes config to output/)
-NETWORK=devnet WALLET=./wallet.json npm run init
+npm run init
 
 # 2. Read pool state — midprice, spread, curves, vault balances
-NETWORK=devnet WALLET=./wallet.json npm run read
+npm run read
 
 # 3. Update midprice, spread, curves, and swap
-NETWORK=devnet WALLET=./wallet.json npm run write
+npm run write
 
 # 4. Configure spread triggers and swap at different spreads
-NETWORK=devnet WALLET=./wallet.json npm run spread
+npm run spread
 
 # 5. Simulate depth curves across 21 inventory levels (local LiteSVM)
 npm run depth-curves        # → output/depth-curves.html
@@ -28,17 +62,13 @@ npm run interp              # → output/interp-comparison.html
 
 ## Key Concepts
 
-Hadron pools expose **5 levers** that market makers use to control pricing:
+Hadron pools expose **5 levers** for controlling pricing:
 
-1. **Midprice** — The oracle price (e.g. 150 USDC/token). Pushed by the authority via `updateMidprice`.
-
-2. **Base spread** — A symmetric bid/ask offset applied around the midprice. For example, 10 bps means the bid sits at `mid × 0.999` and the ask at `mid × 1.001`.
-
-3. **Price curves** — Define how price degrades with trade size (depth). Each side (bid/ask) has a curve mapping cumulative volume to a price factor. Larger trades get progressively worse prices.
-
-4. **Risk curves** — Define how price adjusts based on vault inventory. When one side of the vault is depleted, the risk curve penalizes further trades in that direction, protecting the pool from imbalance.
-
-5. **Curve updates** — Real-time curve edits queued via `submitCurveUpdates` and applied atomically during the next swap. This lets market makers adjust curves without separate on-chain transactions.
+1. **Midprice** - Oracle price pushed by the authority via `updateMidprice`.
+2. **Base spread** - Symmetric bid/ask offset around midprice (e.g. 10 bps).
+3. **Price curves** - Price degradation as a function of trade size (depth).
+4. **Risk curves** - Price adjustment based on vault inventory imbalance.
+5. **Curve updates** - Real-time curve edits queued via `submitCurveUpdates`, applied atomically on the next swap.
 
 ## Examples
 
@@ -66,7 +96,7 @@ npm test
 
 ## Configuration
 
-Set these in `.env` or as environment variables:
+All configuration is via `.env` (loaded automatically by dotenv):
 
 | Variable | Default | Description |
 |----------|---------|-------------|
