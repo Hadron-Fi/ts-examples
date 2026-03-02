@@ -295,16 +295,71 @@ function simulateSwap(
 }
 
 // ============================================================================
-// Data collection
+// SVM factory — creates a fresh instance to avoid memory accumulation
+// ============================================================================
+
+interface SvmEnv {
+  svm: LiteSVM;
+  payer: Keypair;
+  mintX: PublicKey;
+  mintY: PublicKey;
+  payerAtaX: PublicKey;
+  payerAtaY: PublicKey;
+  feeRecipient: PublicKey;
+}
+
+function createSvmEnv(
+  feeConfigPda: PublicKey,
+  feeConfigData: { lamports: number; data: Buffer; },
+  feeRecipient: PublicKey,
+  config: PoolConfig,
+): SvmEnv {
+  const svm = LiteSVM.default()
+    .withFeatureSet(FeatureSet.allEnabled())
+    .withSigverify(false)
+    .withBuiltins()
+    .withSysvars()
+    .withDefaultPrograms()
+    .withLamports(1_000_000_000_000_000n);
+
+  svm.addProgramFromFile(PROGRAM_ID, PROGRAM_PATH);
+
+  const payer = Keypair.generate();
+  svm.airdrop(payer.publicKey, 100_000_000_000_000n);
+
+  const mintX = Keypair.generate();
+  const mintY = Keypair.generate();
+  createMintInSvm(svm, payer, mintX, config.decimalsX);
+  createMintInSvm(svm, payer, mintY, config.decimalsY);
+
+  svm.setAccount(feeConfigPda, {
+    lamports: BigInt(feeConfigData.lamports),
+    data: Buffer.from(feeConfigData.data),
+    owner: HADRON_PROGRAM_ID,
+    executable: false,
+  });
+  svm.airdrop(feeRecipient, 1_000_000_000n);
+
+  createAtaIfNeeded(svm, payer, feeRecipient, mintX.publicKey);
+  createAtaIfNeeded(svm, payer, feeRecipient, mintY.publicKey);
+  const payerAtaX = createAtaIfNeeded(svm, payer, payer.publicKey, mintX.publicKey);
+  const payerAtaY = createAtaIfNeeded(svm, payer, payer.publicKey, mintY.publicKey);
+
+  sendTx(svm, payer, [
+    createMintToInstruction(mintX.publicKey, payerAtaX, payer.publicKey, BigInt("1000000000000000000")),
+    createMintToInstruction(mintY.publicKey, payerAtaY, payer.publicKey, BigInt("1000000000000000000")),
+  ]);
+
+  return { svm, payer, mintX: mintX.publicKey, mintY: mintY.publicKey, payerAtaX, payerAtaY, feeRecipient };
+}
+
+// ============================================================================
+// Data collection — fresh SVM per frame to keep memory bounded
 // ============================================================================
 
 function collectFrames(
-  svm: LiteSVM,
-  payer: Keypair,
-  mintX: PublicKey,
-  mintY: PublicKey,
-  payerAtaX: PublicKey,
-  payerAtaY: PublicKey,
+  feeConfigPda: PublicKey,
+  feeConfigData: { lamports: number; data: Buffer; },
   feeRecipient: PublicKey,
   config: PoolConfig,
   inventorySteps: number,
@@ -319,6 +374,9 @@ function collectFrames(
       `\x1b[33m  Frame ${step + 1}/${inventorySteps}\x1b[0m (${(pctBase * 100).toFixed(0)}% base) ... `
     );
 
+    // Fresh SVM per frame — previous frame's accounts are garbage collected
+    const env = createSvmEnv(feeConfigPda, feeConfigData, feeRecipient, config);
+
     const bid: { price: number; cumVolume: number }[] = [];
     const ask: { price: number; cumVolume: number }[] = [];
 
@@ -326,8 +384,8 @@ function collectFrames(
     for (let p = 1; p <= probePointsPerSide; p++) {
       const volume = (probeVolumeMax * p) / probePointsPerSide;
       const result = simulateSwap(
-        svm, payer, mintX, mintY, payerAtaX, payerAtaY,
-        feeRecipient, config, pctBase, "bid", volume
+        env.svm, env.payer, env.mintX, env.mintY, env.payerAtaX, env.payerAtaY,
+        env.feeRecipient, config, pctBase, "bid", volume
       );
       if (result && result.amountOut > 0n) {
         const inH = atomsToHuman(result.amountIn, config.decimalsX);
@@ -341,8 +399,8 @@ function collectFrames(
       const volumeBase = (probeVolumeMax * p) / probePointsPerSide;
       const volumeQuote = volumeBase * config.midprice;
       const result = simulateSwap(
-        svm, payer, mintX, mintY, payerAtaX, payerAtaY,
-        feeRecipient, config, pctBase, "ask", volumeQuote
+        env.svm, env.payer, env.mintX, env.mintY, env.payerAtaX, env.payerAtaY,
+        env.feeRecipient, config, pctBase, "ask", volumeQuote
       );
       if (result && result.amountOut > 0n) {
         const inH = atomsToHuman(result.amountIn, config.decimalsY);
@@ -361,12 +419,8 @@ function collectFrames(
 }
 
 function collectRiskData(
-  svm: LiteSVM,
-  payer: Keypair,
-  mintX: PublicKey,
-  mintY: PublicKey,
-  payerAtaX: PublicKey,
-  payerAtaY: PublicKey,
+  feeConfigPda: PublicKey,
+  feeConfigData: { lamports: number; data: Buffer; },
   feeRecipient: PublicKey,
   config: PoolConfig,
   pctBaseValues: number[]
@@ -375,13 +429,16 @@ function collectRiskData(
   const results: RiskPoint[] = [];
 
   for (const pctBase of pctBaseValues) {
+    // Fresh SVM per probe pair
+    const env = createSvmEnv(feeConfigPda, feeConfigData, feeRecipient, config);
+
     const bidResult = simulateSwap(
-      svm, payer, mintX, mintY, payerAtaX, payerAtaY,
-      feeRecipient, config, pctBase, "bid", testSizeBase
+      env.svm, env.payer, env.mintX, env.mintY, env.payerAtaX, env.payerAtaY,
+      env.feeRecipient, config, pctBase, "bid", testSizeBase
     );
     const askResult = simulateSwap(
-      svm, payer, mintX, mintY, payerAtaX, payerAtaY,
-      feeRecipient, config, pctBase, "ask", testSizeBase * config.midprice
+      env.svm, env.payer, env.mintX, env.mintY, env.payerAtaX, env.payerAtaY,
+      env.feeRecipient, config, pctBase, "ask", testSizeBase * config.midprice
     );
 
     const bidPrice =
@@ -470,57 +527,12 @@ function collectRiskData(
   logInfo("Risk Bid:", `${curves.riskBid.numPoints} points`);
   logInfo("Risk Ask:", `${curves.riskAsk.numPoints} points`);
 
-  logHeader("Setting up LiteSVM");
-
-  // ---------------------------------------------------------------
-  // LiteSVM setup
-  // ---------------------------------------------------------------
-  const svm = LiteSVM.default()
-    .withFeatureSet(FeatureSet.allEnabled())
-    .withSigverify(false)
-    .withBuiltins()
-    .withSysvars()
-    .withDefaultPrograms()
-    .withLamports(1_000_000_000_000_000n);
-
-  svm.addProgramFromFile(PROGRAM_ID, PROGRAM_PATH);
-
-  const payer = Keypair.generate();
-  svm.airdrop(payer.publicKey, 100_000_000_000_000n);
-
-  // Create token mints
-  const mintX = Keypair.generate();
-  const mintY = Keypair.generate();
-  createMintInSvm(svm, payer, mintX, config.decimalsX);
-  createMintInSvm(svm, payer, mintY, config.decimalsY);
-
-  // Pull fee config from devnet and inject into LiteSVM
+  // Pull fee config from devnet for injection into each SVM instance
   const [feeConfigPda] = getFeeConfigAddress();
   const feeConfigAcct = await devnetConn.getAccountInfo(feeConfigPda);
   if (!feeConfigAcct) throw new Error("Fee config not found on devnet");
-
-  svm.setAccount(feeConfigPda, {
-    lamports: BigInt(feeConfigAcct.lamports),
-    data: Buffer.from(feeConfigAcct.data),
-    owner: HADRON_PROGRAM_ID,
-    executable: false,
-  });
-
-  const feeConfig = decodeFeeConfig(feeConfigAcct.data);
-  const feeRecipient = feeConfig.feeRecipient;
-  svm.airdrop(feeRecipient, 1_000_000_000n);
-
-  // Create ATAs for fee recipient and payer
-  createAtaIfNeeded(svm, payer, feeRecipient, mintX.publicKey);
-  createAtaIfNeeded(svm, payer, feeRecipient, mintY.publicKey);
-  const payerAtaX = createAtaIfNeeded(svm, payer, payer.publicKey, mintX.publicKey);
-  const payerAtaY = createAtaIfNeeded(svm, payer, payer.publicKey, mintY.publicKey);
-
-  // Mint a large supply for the payer (covers all deposits + swaps)
-  sendTx(svm, payer, [
-    createMintToInstruction(mintX.publicKey, payerAtaX, payer.publicKey, BigInt("1000000000000000000")),
-    createMintToInstruction(mintY.publicKey, payerAtaY, payer.publicKey, BigInt("1000000000000000000")),
-  ]);
+  const feeConfigData = { lamports: feeConfigAcct.lamports, data: Buffer.from(feeConfigAcct.data) };
+  const feeRecipient = decodeFeeConfig(feeConfigAcct.data).feeRecipient;
 
   // ---------------------------------------------------------------
   // Simulation parameters
@@ -536,15 +548,13 @@ function collectRiskData(
   );
 
   const frames = collectFrames(
-    svm, payer, mintX.publicKey, mintY.publicKey,
-    payerAtaX, payerAtaY, feeRecipient,
+    feeConfigPda, feeConfigData, feeRecipient,
     config, inventorySteps, probePointsPerSide, probeVolumeMax
   );
 
   logHeader("Collecting risk curve data");
   const riskData = collectRiskData(
-    svm, payer, mintX.publicKey, mintY.publicKey,
-    payerAtaX, payerAtaY, feeRecipient,
+    feeConfigPda, feeConfigData, feeRecipient,
     config, frames.map((f) => f.pctBase)
   );
 
