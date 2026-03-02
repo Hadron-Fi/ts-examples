@@ -66,7 +66,7 @@ fn main() {
         authority: authority.pubkey(),
         initial_midprice_q32: to_q32(initial_midprice),
         oracle_mode: None,
-        max_prefab_slots: None,
+        max_prefab_slots: Some(3),
         max_curve_points: None,
         token_program_x: Some(spl_token::id()),
         token_program_y: Some(spl_token::id()),

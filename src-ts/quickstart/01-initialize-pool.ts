@@ -56,6 +56,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
       mintY: mintY.publicKey,
       authority: authority.publicKey,
       initialMidpriceQ32: toQ32(initialMidprice),
+      maxPrefabSlots: 3,
       tokenProgramX: TOKEN_PROGRAM_ID,
       tokenProgramY: TOKEN_PROGRAM_ID,
     }
