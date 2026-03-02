@@ -12,8 +12,14 @@ npm run read          Inspect pool state (midprice, spread, curves, balances)
 npm run write         Update midprice, spread, curves, execute swaps
       │
       ▼
+npm run spread        Configure spread triggers, swap at different widths
+      │
+      ▼
 npm run depth-curves  Simulate & visualize depth across multiple inventory levels
-                         ↳ output/depth-curves.html
+      │                  ↳ output/depth-curves.html
+      ▼
+npm run interp        Compare 5 interpolation modes on the same control points
+                         ↳ output/interp-comparison.html
 ```
 
 > To customize the pool, edit [`src/quickstart/01-initialize-pool.ts`](src/quickstart/01-initialize-pool.ts) and re-run `npm run init`.
@@ -116,7 +122,30 @@ All examples write to `output/`:
 |------|-----------|-------------|
 | `pool-config.json` | `npm run init` | Array of pool configs (address, authority, timestamp). Tests 02-04 read the **latest entry**. |
 | `authority-{addr}.json` | `npm run init` | Authority keypair for each pool (needed for write operations) |
+| `sim-cache.json` | `npm run depth-curves` / `npm run interp` | Cached pool + fee config from devnet (auto-fetched on first simulation run) |
 | `depth-curves.html` | `npm run depth-curves` | Interactive depth chart with inventory slider |
 | `interp-comparison.html` | `npm run interp` | Side-by-side interpolation mode comparison |
 
 You can run `npm run init` multiple times: each run appends a new pool to `pool-config.json`. Subsequent commands (`read`, `write`, `spread`, `depth-curves`) always use the most recent pool.
+
+> Simulations (`depth-curves`, `interp`) auto-fetch pool and fee config from devnet on the first run, caching the result in `output/sim-cache.json`. Delete the cache file to force a refresh.
+
+## Docker
+
+LiteSVM simulations require a Linux environment. On macOS/Windows, use Docker:
+
+```bash
+# Build once
+docker build -t hadron-examples .
+
+# Run any simulation
+docker run --rm --env-file .env \
+  -v "$(pwd)/output:/app/output" \
+  hadron-examples npm run depth-curves
+
+docker run --rm --env-file .env \
+  -v "$(pwd)/output:/app/output" \
+  hadron-examples npm run interp
+```
+
+The `--env-file .env` flag forwards your RPC endpoint. The `-v` bind mount writes output files (HTML visualizations, cache) back to your host `output/` directory.

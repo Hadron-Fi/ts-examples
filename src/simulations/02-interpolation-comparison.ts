@@ -20,7 +20,6 @@
  */
 import { LiteSVM, FeatureSet } from "litesvm";
 import {
-  Connection,
   Keypair,
   PublicKey,
   Transaction,
@@ -30,16 +29,12 @@ import {
   TOKEN_PROGRAM_ID,
   MintLayout,
   getAssociatedTokenAddressSync,
-  createAssociatedTokenAccountInstruction,
-  createMintToInstruction,
 } from "@solana/spl-token";
 import {
   Hadron,
   toQ32,
   Interpolation,
   Side,
-  getFeeConfigAddress,
-  decodeFeeConfig,
   decodeConfig,
   decodeMidpriceOracle,
   decodeCurveMeta,
@@ -125,21 +120,27 @@ function createMintInSvm(
   });
 }
 
-function createAtaIfNeeded(
+/** Inject a token account directly via setAccount — avoids SPL Token BPF execution. */
+function injectTokenAccount(
   svm: LiteSVM,
-  payer: Keypair,
+  mint: PublicKey,
   owner: PublicKey,
-  mint: PublicKey
+  amount: bigint = 0n
 ): PublicKey {
   const ata = getAssociatedTokenAddressSync(mint, owner, true);
   if (svm.getAccount(ata)) return ata;
-  const ix = createAssociatedTokenAccountInstruction(
-    payer.publicKey,
-    ata,
-    owner,
-    mint
-  );
-  sendTx(svm, payer, [ix]);
+  // SPL Token account layout: 165 bytes
+  const data = Buffer.alloc(165);
+  mint.toBuffer().copy(data, 0);         // mint (32)
+  owner.toBuffer().copy(data, 32);       // owner (32)
+  data.writeBigUInt64LE(amount, 64);     // amount (8)
+  data.writeUInt8(1, 108);               // state = Initialized
+  svm.setAccount(ata, {
+    lamports: 1_000_000_000n,
+    data,
+    owner: TOKEN_PROGRAM_ID,
+    executable: false,
+  });
   return ata;
 }
 
@@ -330,9 +331,9 @@ function collectModeBidDepth(
       }),
     ]);
 
-    // Deposit
-    createAtaIfNeeded(svm, payer, pool.addresses.config, mintX);
-    createAtaIfNeeded(svm, payer, pool.addresses.config, mintY);
+    // Deposit — inject vault ATAs directly (bypasses SPL Token BPF)
+    injectTokenAccount(svm, mintX, pool.addresses.config, 0n);
+    injectTokenAccount(svm, mintY, pool.addresses.config, 0n);
     sendTx(svm, payer, [
       pool.deposit(payer.publicKey, {
         amountX: humanToAtoms(DEPOSIT_X, DECIMALS_X),
@@ -487,6 +488,30 @@ function generateInterpHtml(
 // ============================================================================
 
 (async () => {
+  // ------------------------------------------------------------------
+  // Load fee config from cache (auto-fetch via subprocess if missing)
+  // ------------------------------------------------------------------
+  const cachePath = path.resolve(__dirname, "../../output/sim-cache.json");
+
+  if (!fs.existsSync(cachePath)) {
+    logHeader("Fetching pool data from devnet");
+    const fetchScript = path.resolve(__dirname, "fetch-sim-cache.ts");
+    const { execFileSync } = await import("child_process");
+    execFileSync("npx", ["tsx", fetchScript], {
+      stdio: "inherit",
+      env: process.env,
+    });
+  }
+
+  if (!fs.existsSync(cachePath)) {
+    throw new Error("Failed to create sim-cache.json. Check devnet connection.");
+  }
+
+  const cache = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+  const feeConfigPda = new PublicKey(cache.feeConfigPda);
+  const feeConfigData = Buffer.from(cache.feeConfigData, "base64");
+  const feeRecipient = new PublicKey(cache.feeRecipient);
+
   logHeader("Setting up LiteSVM");
 
   const svm = LiteSVM.default()
@@ -507,36 +532,21 @@ function generateInterpHtml(
   createMintInSvm(svm, payer, mintX, DECIMALS_X);
   createMintInSvm(svm, payer, mintY, DECIMALS_Y);
 
-  // Fetch fee config from devnet
-  const [feeConfigPda] = getFeeConfigAddress();
-  const rpcUrl = process.env.RPC_URL || "https://api.devnet.solana.com";
-  const devnetConn = new Connection(rpcUrl, "confirmed");
-  const feeConfigAcct = await devnetConn.getAccountInfo(feeConfigPda);
-  if (!feeConfigAcct) throw new Error("Fee config not found on devnet");
-
+  // Inject fee config from cache
   svm.setAccount(feeConfigPda, {
-    lamports: BigInt(feeConfigAcct.lamports),
-    data: Buffer.from(feeConfigAcct.data),
+    lamports: BigInt(cache.feeConfigLamports),
+    data: feeConfigData,
     owner: HADRON_PROGRAM_ID,
     executable: false,
   });
-
-  const feeConfig = decodeFeeConfig(feeConfigAcct.data);
-  const feeRecipient = feeConfig.feeRecipient;
   svm.airdrop(feeRecipient, 1_000_000_000n);
 
-  // Create ATAs
-  createAtaIfNeeded(svm, payer, feeRecipient, mintX.publicKey);
-  createAtaIfNeeded(svm, payer, feeRecipient, mintY.publicKey);
-  createAtaIfNeeded(svm, payer, payer.publicKey, mintX.publicKey);
-  const payerAtaY = createAtaIfNeeded(svm, payer, payer.publicKey, mintY.publicKey);
-
-  // Mint large supply
-  const payerAtaX = getAssociatedTokenAddressSync(mintX.publicKey, payer.publicKey, true);
-  sendTx(svm, payer, [
-    createMintToInstruction(mintX.publicKey, payerAtaX, payer.publicKey, BigInt("1000000000000000000")),
-    createMintToInstruction(mintY.publicKey, payerAtaY, payer.publicKey, BigInt("1000000000000000000")),
-  ]);
+  // Inject token accounts directly — bypasses SPL Token/ATA BPF execution
+  const largeBalance = 1_000_000_000_000_000n;
+  injectTokenAccount(svm, mintX.publicKey, feeRecipient, 0n);
+  injectTokenAccount(svm, mintY.publicKey, feeRecipient, 0n);
+  const payerAtaX = injectTokenAccount(svm, mintX.publicKey, payer.publicKey, largeBalance);
+  const payerAtaY = injectTokenAccount(svm, mintY.publicKey, payer.publicKey, largeBalance);
 
   // -----------------------------------------------------------------
   // Collect bid depth data for each mode
