@@ -96,8 +96,8 @@ async function main() {
 
   console.log("F. Mint tokens");
   sendTx(svm, payer, [
-    createMintToInstruction(mintX.publicKey, payerAtaX, payer.publicKey, BigInt("1000000000000000000")),
-    createMintToInstruction(mintY.publicKey, payerAtaY, payer.publicKey, BigInt("1000000000000000000")),
+    createMintToInstruction(mintX.publicKey, payerAtaX, payer.publicKey, 100_000_000_000n),
+    createMintToInstruction(mintY.publicKey, payerAtaY, payer.publicKey, 100_000_000_000_000n),
   ]);
   logMem("minted");
 
