@@ -116,7 +116,7 @@ npm run interp              # → output/interp-comparison.html
 
 ## Docker
 
-LiteSVM's native bindings require x86_64 Linux with glibc. If you're on macOS, Windows, or a musl-based distro (Alpine), use Docker:
+LiteSVM's native bindings require x86_64 Linux with glibc. If you try running litesvm simulations and see `Cannot find native binding. npm has a bug related to optional dependencies`, use these containerized versions. 
 
 ```bash
 npm run docker:build         # build image (once)
