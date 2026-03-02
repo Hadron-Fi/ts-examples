@@ -27,7 +27,31 @@ Hadron pools expose **6 levers** for controlling pricing:
 3. **Price curves**: price degradation as a function of trade size (depth)
 4. **Risk curves**: price adjustment based on vault inventory imbalance
 5. **Curve updates**: real-time curve edits queued via `submitCurveUpdates`, applied atomically on the next swap
-6. **Spread triggers**: per-account spread overrides that automatically widen the bid/ask when specific signers (e.g. known arb bots) are present in a swap
+6. **Spread triggers**: per-account spread overrides that automatically widen the bid/ask
+
+## Key Files
+
+### Quickstart | devnet pool lifecycle
+
+| # | File | Description | Run |
+|---|------|-------------|-----|
+| 01 | [Initialize Pool](src/quickstart/01-initialize-pool.test.ts) | Create mints, initialize a pool, set price + risk curves, deposit liquidity, update midprice | `npm run init` |
+| 02 | [Read Pool State](src/quickstart/02-read-pool-state.test.ts) | Load an existing pool and print midprice, spread, active curves, vault balances, and oracle state | `npm run read` |
+| 03 | [Write Pool Updates](src/quickstart/03-write-pool-updates.test.ts) | `updateMidprice`, `updateBaseSpread`, `submitCurveUpdates`, and swaps on a live devnet pool | `npm run write` |
+| 04 | [Spread Config](src/quickstart/04-spread-config.test.ts) | Initialize a spread config, add/update/remove spread triggers, and swap at different spread widths | `npm run spread` |
+
+### Simulations | local LiteSVM
+
+| # | File | Description | Run |
+|---|------|-------------|-----|
+| 01 | [Depth Curves](src/simulations/01-depth-curves.test.ts) | Recreate the pool in LiteSVM at 21 inventory levels, probe swap prices, generate interactive HTML visualization | `npm run depth-curves` |
+| 02 | [Interpolation Comparison](src/simulations/02-interpolation-comparison.test.ts) | Compare Step, Linear, Hyperbolic, Quadratic, and Cubic interpolation modes on the same control points via probe swaps | `npm run interp` |
+
+Run all examples:
+
+```bash
+npm test
+```
 
 ## Setup
 
@@ -88,30 +112,6 @@ npm run depth-curves        # → output/depth-curves.html
 
 # 6. Compare 5 interpolation modes on the same control points (runs locally in LiteSVM)
 npm run interp              # → output/interp-comparison.html
-```
-
-## Key Files
-
-### Quickstart | devnet pool lifecycle
-
-| # | File | Description | Run |
-|---|------|-------------|-----|
-| 01 | [Initialize Pool](src/quickstart/01-initialize-pool.test.ts) | Create mints, initialize a pool, set price + risk curves, deposit liquidity, update midprice | `npm run init` |
-| 02 | [Read Pool State](src/quickstart/02-read-pool-state.test.ts) | Load an existing pool and print midprice, spread, active curves, vault balances, and oracle state | `npm run read` |
-| 03 | [Write Pool Updates](src/quickstart/03-write-pool-updates.test.ts) | `updateMidprice`, `updateBaseSpread`, `submitCurveUpdates`, and swaps on a live devnet pool | `npm run write` |
-| 04 | [Spread Config](src/quickstart/04-spread-config.test.ts) | Initialize a spread config, add/update/remove spread triggers, and swap at different spread widths | `npm run spread` |
-
-### Simulations | local LiteSVM
-
-| # | File | Description | Run |
-|---|------|-------------|-----|
-| 01 | [Depth Curves](src/simulations/01-depth-curves.test.ts) | Recreate the pool in LiteSVM at 21 inventory levels, probe swap prices, generate interactive HTML visualization | `npm run depth-curves` |
-| 02 | [Interpolation Comparison](src/simulations/02-interpolation-comparison.test.ts) | Compare Step, Linear, Hyperbolic, Quadratic, and Cubic interpolation modes on the same control points via probe swaps | `npm run interp` |
-
-Run all examples:
-
-```bash
-npm test
 ```
 
 ## Output Files
