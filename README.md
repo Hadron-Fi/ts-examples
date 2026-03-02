@@ -33,56 +33,21 @@ Hadron pools expose **6 levers** for controlling pricing:
 
 ### Quickstart | devnet pool lifecycle
 
-**[01 - Initialize Pool](src/quickstart/01-initialize-pool.test.ts)** | `npm run init`
-
-Full pool creation from scratch. This is the file to edit when customizing the pool.
-1. Creates two SPL token mints (X = base, Y = quote, both 6 decimals)
-2. Airdrops SOL to a new authority keypair
-3. Initializes the pool with a $150 midprice
-4. Sets 11-point bid + ask price curves (linear interpolation, kinked at 750 X)
-5. Sets 5-point bid + ask risk curves for inventory rebalancing
-6. Deposits 5,000 X + 750,000 Y (50/50 value split)
-7. Updates the midprice oracle to $152.50
-8. Saves pool address + authority keypair to `output/pool-config.json`
-
-**[02 - Read Pool State](src/quickstart/02-read-pool-state.test.ts)** | `POOL=<address> npm run read`
-
-Read-only inspection of an existing pool. Prints:
-- Midprice, base spread, and oracle metadata
-- Active curve slots with decoded points and interpolation modes
-- Vault balances for both tokens
-
-**[03 - Write Pool Updates](src/quickstart/03-write-pool-updates.test.ts)** | `POOL=<address> npm run write`
-
-Live parameter updates on a running pool. Demonstrates the SDK methods market makers use in production:
-1. `updateMidprice`: push a new oracle price
-2. `updateBaseSpread`: widen or narrow the base spread
-3. `updateMidpriceAndBaseSpread`: atomic update of both
-4. `submitCurveUpdates`: queue point-level edits to the price curve
-5. `swap`: executes a swap (pending curve edits apply atomically during the swap)
-
-**[04 - Spread Config](src/quickstart/04-spread-config.test.ts)** | `POOL=<address> npm run spread`
-
-Spread trigger lifecycle. Shows how to dynamically widen spreads for specific accounts:
-1. Initialize a spread config on the pool
-2. Add spread triggers via `addSpreadTriggers` (additive merge)
-3. Update and remove individual triggers
-4. Full replacement via `updateSpreadConfig`
-5. Swaps at each stage to show the effect on pricing
+| # | File | Description | Run |
+|---|------|-------------|-----|
+| 01 | [Initialize Pool](src/quickstart/01-initialize-pool.test.ts) | Creates a pool from scratch: mints, curves, deposit, midprice. Edit this file to customize the pool. | `npm run init` |
+| 02 | [Read Pool State](src/quickstart/02-read-pool-state.test.ts) | Prints midprice, spread, decoded curve points, vault balances, and oracle state for an existing pool. | `npm run read` |
+| 03 | [Write Pool Updates](src/quickstart/03-write-pool-updates.test.ts) | Updates midprice, base spread, and curve points on a live pool, then executes a swap. | `npm run write` |
+| 04 | [Spread Config](src/quickstart/04-spread-config.test.ts) | Full spread trigger lifecycle: initialize, add/update/remove triggers, swap at each stage. | `npm run spread` |
 
 ### Simulations | local LiteSVM
 
-**[01 - Depth Curves](src/simulations/01-depth-curves.test.ts)** | `npm run depth-curves`
+| # | File | Description | Run |
+|---|------|-------------|-----|
+| 01 | [Depth Curves](src/simulations/01-depth-curves.test.ts) | Recreates the pool in LiteSVM at 21 inventory levels and generates an interactive depth chart. | `npm run depth-curves` |
+| 02 | [Interpolation Comparison](src/simulations/02-interpolation-comparison.test.ts) | Compares Step, Linear, Hyperbolic, Quadratic, and Cubic interpolation on the same control points. | `npm run interp` |
 
-Visualizes how the pool's depth changes across inventory levels. Loads curve config from your devnet pool, recreates it in LiteSVM at 21 inventory levels (5% to 95%), probes swap prices at increasing trade sizes, and generates an interactive HTML chart with an inventory slider. Output: `output/depth-curves.html`
-
-**[02 - Interpolation Comparison](src/simulations/02-interpolation-comparison.test.ts)** | `npm run interp`
-
-Side-by-side comparison of all 5 interpolation modes (Step, Linear, Hyperbolic, Quadratic, Cubic) using the same control points. Runs probe swaps for each mode and generates a multi-panel HTML chart. Output: `output/interp-comparison.html`
-
----
-
-Run all examples: `npm test`
+Run all: `npm test`
 
 ## Setup
 
