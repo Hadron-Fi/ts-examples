@@ -10,7 +10,10 @@
     "write": "tsx src/quickstart/03-write-pool-updates.ts",
     "spread": "tsx src/quickstart/04-spread-config.ts",
     "depth-curves": "tsx src/simulations/01-depth-curves.ts",
-    "interp": "tsx src/simulations/02-interpolation-comparison.ts"
+    "interp": "tsx src/simulations/02-interpolation-comparison.ts",
+    "docker:build": "docker build -t hadron-examples .",
+    "docker:depth-curves": "docker run --rm --env-file .env -v \"$(pwd)/output:/app/output\" hadron-examples npm run depth-curves",
+    "docker:interp": "docker run --rm --env-file .env -v \"$(pwd)/output:/app/output\" hadron-examples npm run interp"
   },
   "dependencies": {
     "@hadron-fi/sdk": "^0.3.3",
