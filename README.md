@@ -12,7 +12,7 @@ npm run read          Inspect pool state (midprice, spread, curves, balances)
 npm run write         Update midprice, spread, curves, execute swaps
       │
       ▼
-npm run depth-curves  Simulate & visualize depth across 21 inventory levels
+npm run depth-curves  Simulate & visualize depth across multiple inventory levels
                          ↳ output/depth-curves.html
 ```
 
@@ -44,7 +44,7 @@ Hadron pools expose **6 levers** for controlling pricing:
 
 | # | File | Description | Run |
 |---|------|-------------|-----|
-| 01 | [Depth Curves](src/simulations/01-depth-curves.test.ts) | Recreates the pool in LiteSVM at 21 inventory levels and generates an interactive depth chart. | `npm run depth-curves` |
+| 01 | [Depth Curves](src/simulations/01-depth-curves.test.ts) | Recreates the pool in LiteSVM at multiple inventory levels and generates an interactive depth chart. | `npm run depth-curves` |
 | 02 | [Interpolation Comparison](src/simulations/02-interpolation-comparison.test.ts) | Compares Step, Linear, Hyperbolic, Quadratic, and Cubic interpolation on the same control points. | `npm run interp` |
 
 Run all: `npm test`
@@ -103,7 +103,7 @@ POOL=<address> npm run write
 # 4. Configure spread triggers | add/update/remove triggers, swap at different widths
 POOL=<address> npm run spread
 
-# 5. Simulate depth curves across 21 inventory levels (runs locally in LiteSVM)
+# 5. Simulate depth curves across multiple inventory levels (runs locally in LiteSVM)
 npm run depth-curves        # → output/depth-curves.html
 
 # 6. Compare 5 interpolation modes on the same control points (runs locally in LiteSVM)
