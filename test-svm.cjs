@@ -41,10 +41,7 @@ for (let i = 0; i < 20; i++) {
     .withSysvars()
     .withDefaultPrograms()
     .withLamports(1000000000000000n);
-  s.addProgramFromFile(
-    "hdrn4UEBJFjPEuUQnmRoA7YoXMeTcXVvMmME8sNFEkP",
-    PROGRAM_PATH
-  );
+  s.addProgramFromFile(PROGRAM_ID, PROGRAM_PATH);
   const used = process.memoryUsage();
   console.log(`  Instance ${i}: rss=${Math.round(used.rss / 1024 / 1024)}MB heap=${Math.round(used.heapUsed / 1024 / 1024)}MB`);
 }
