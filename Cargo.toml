@@ -21,7 +21,7 @@ name = "spread-config"
 path = "src-rs/quickstart/04-spread-config.rs"
 
 [dependencies]
-hadron-sdk = { path = "../hadron-sdk-rs", features = ["rpc"] }
+hadron-sdk = { version = "0.1", features = ["rpc"] }
 solana-sdk = "2.2"
 solana-client = "2.2"
 spl-token = { version = "8", features = ["no-entrypoint"] }
