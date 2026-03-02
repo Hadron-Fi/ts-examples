@@ -26,8 +26,6 @@ import {
   TOKEN_PROGRAM_ID,
   MintLayout,
   getAssociatedTokenAddressSync,
-  createAssociatedTokenAccountInstruction,
-  createMintToInstruction,
 } from "@solana/spl-token";
 import {
   Hadron,
@@ -128,21 +126,34 @@ function createMintInSvm(
   });
 }
 
-function createAtaIfNeeded(
+/** Inject a token account directly via setAccount — avoids SPL Token BPF execution. */
+function injectTokenAccount(
   svm: LiteSVM,
-  payer: Keypair,
+  mint: PublicKey,
   owner: PublicKey,
-  mint: PublicKey
+  amount: bigint = 0n
 ): PublicKey {
   const ata = getAssociatedTokenAddressSync(mint, owner, true);
   if (svm.getAccount(ata)) return ata;
-  const ix = createAssociatedTokenAccountInstruction(
-    payer.publicKey,
-    ata,
-    owner,
-    mint
-  );
-  sendTx(svm, payer, [ix]);
+  // SPL Token account layout: 165 bytes
+  const data = Buffer.alloc(165);
+  mint.toBuffer().copy(data, 0);         // mint (32)
+  owner.toBuffer().copy(data, 32);       // owner (32)
+  data.writeBigUInt64LE(amount, 64);     // amount (8)
+  // delegateOption = 0 (72, 4 bytes) — already zeroed
+  // delegate (76, 32 bytes) — zeroed
+  data.writeUInt8(1, 108);               // state = Initialized
+  // isNativeOption = 0 (109, 4 bytes) — zeroed
+  // isNative (113, 8 bytes) — zeroed
+  // delegatedAmount (121, 8 bytes) — zeroed
+  // closeAuthorityOption = 0 (129, 4 bytes) — zeroed
+  // closeAuthority (133, 32 bytes) — zeroed
+  svm.setAccount(ata, {
+    lamports: 1_000_000_000n,
+    data,
+    owner: TOKEN_PROGRAM_ID,
+    executable: false,
+  });
   return ata;
 }
 
@@ -250,9 +261,9 @@ function simulateSwap(
       }),
     ]);
 
-    // 5. Create vault ATAs + deposit
-    createAtaIfNeeded(svm, payer, pool.addresses.config, mintX);
-    createAtaIfNeeded(svm, payer, pool.addresses.config, mintY);
+    // 5. Inject vault ATAs + deposit
+    injectTokenAccount(svm, mintX, pool.addresses.config, 0n);
+    injectTokenAccount(svm, mintY, pool.addresses.config, 0n);
 
     const baseValueUsd = config.totalValueUsd * pctBase;
     const quoteValueUsd = config.totalValueUsd * (1 - pctBase);
@@ -340,15 +351,13 @@ function createSvmEnv(
   });
   svm.airdrop(feeRecipient, 1_000_000_000n);
 
-  createAtaIfNeeded(svm, payer, feeRecipient, mintX.publicKey);
-  createAtaIfNeeded(svm, payer, feeRecipient, mintY.publicKey);
-  const payerAtaX = createAtaIfNeeded(svm, payer, payer.publicKey, mintX.publicKey);
-  const payerAtaY = createAtaIfNeeded(svm, payer, payer.publicKey, mintY.publicKey);
-
-  sendTx(svm, payer, [
-    createMintToInstruction(mintX.publicKey, payerAtaX, payer.publicKey, BigInt("1000000000000000000")),
-    createMintToInstruction(mintY.publicKey, payerAtaY, payer.publicKey, BigInt("1000000000000000000")),
-  ]);
+  // Inject token accounts directly — bypasses SPL Token/ATA BPF execution
+  // which crashes on some x86 litesvm builds (std::bad_alloc in BPF JIT)
+  const largeBalance = 1_000_000_000_000_000n;
+  injectTokenAccount(svm, mintX.publicKey, feeRecipient, 0n);
+  injectTokenAccount(svm, mintY.publicKey, feeRecipient, 0n);
+  const payerAtaX = injectTokenAccount(svm, mintX.publicKey, payer.publicKey, largeBalance);
+  const payerAtaY = injectTokenAccount(svm, mintY.publicKey, payer.publicKey, largeBalance);
 
   return { svm, payer, mintX: mintX.publicKey, mintY: mintY.publicKey, payerAtaX, payerAtaY, feeRecipient };
 }
