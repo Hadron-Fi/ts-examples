@@ -76,14 +76,25 @@ const YELLOW = "\x1b[33m";
 const DIM = "\x1b[2m";
 const RESET = "\x1b[0m";
 
-/** Pretty-print a labeled transaction signature. */
+/** Pretty-print a labeled transaction signature (Solscan link on devnet, raw sig otherwise). */
 export function logTx(label: string, sig: string): void {
-  process.stdout.write(`${GREEN}  ✓ ${label}${RESET} ${DIM}${sig}${RESET}\n`);
+  if (isDevnet()) {
+    process.stdout.write(`${GREEN}  ✓ ${label}${RESET} https://solscan.io/tx/${sig}?cluster=devnet\n`);
+  } else {
+    process.stdout.write(`${GREEN}  ✓ ${label}${RESET} ${DIM}${sig}${RESET}\n`);
+  }
 }
 
 /** Print a key-value info line. */
 export function logInfo(label: string, value: string): void {
   process.stdout.write(`${CYAN}  ${label}${RESET} ${value}\n`);
+}
+
+/** Print a Solscan devnet link for an account. */
+export function logExplorer(label: string, address: string): void {
+  if (isDevnet()) {
+    process.stdout.write(`${CYAN}  ${label}${RESET} https://solscan.io/account/${address}?cluster=devnet\n`);
+  }
 }
 
 /** Print a section header. */

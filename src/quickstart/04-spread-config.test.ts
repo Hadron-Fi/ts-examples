@@ -57,16 +57,32 @@ describe("Spread config", () => {
     // ------------------------------------------------------------------
     // Load pool config from test 01 output
     // ------------------------------------------------------------------
+    // Accept a pool address via POOL env var, otherwise use the latest from pool-config.json
+    // Usage: POOL=<address> npm run spread
     const configPath = path.resolve(__dirname, "../../output/pool-config.json");
-    if (!fs.existsSync(configPath)) {
-      throw new Error(
-        "output/pool-config.json not found. Run test 01 first:\n" +
-          "  NETWORK=devnet WALLET=./wallet.json npm run init"
-      );
+    let poolJson: any;
+    if (process.env.POOL) {
+      if (!fs.existsSync(configPath)) {
+        throw new Error("output/pool-config.json not found — need authority keypair for writes.");
+      }
+      const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      const pools = Array.isArray(raw) ? raw : [raw];
+      poolJson = pools.find((p: any) => p.poolAddress === process.env.POOL);
+      if (!poolJson) {
+        throw new Error(`Pool ${process.env.POOL} not found in pool-config.json`);
+      }
+    } else {
+      if (!fs.existsSync(configPath)) {
+        throw new Error(
+          "output/pool-config.json not found. Run test 01 first:\n" +
+            "  npm run init\n" +
+            "Or pass a pool address directly:\n" +
+            "  POOL=<address> npm run spread"
+        );
+      }
+      const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      poolJson = Array.isArray(raw) ? raw[raw.length - 1] : raw;
     }
-
-    const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    const poolJson = Array.isArray(raw) ? raw[raw.length - 1] : raw;
     const poolAddress = new PublicKey(poolJson.poolAddress);
 
     const outputDir = path.resolve(__dirname, "../../output");

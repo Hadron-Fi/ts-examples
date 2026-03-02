@@ -21,7 +21,7 @@ import { describe, it } from "vitest";
 import { Keypair } from "@solana/web3.js";
 import { TOKEN_PROGRAM_ID } from "@solana/spl-token";
 import { Hadron, toQ32, Interpolation, Side } from "@hadron-fi/sdk";
-import { TestHarness, logTx, logInfo, logHeader } from "../setup";
+import { TestHarness, logTx, logInfo, logHeader, logExplorer } from "../setup";
 import fs from "fs";
 import path from "path";
 
@@ -60,10 +60,13 @@ describe("Initialize pool with price and risk curves", () => {
       }
     );
 
-    logHeader("Initialize pool");
+    logHeader("Step 1 — Initialize pool");
+    logInfo("Creating two token mints (X = base, Y = quote) with 6 decimals...", "");
+    logInfo("Airdropping 0.01 SOL to the pool authority for tx fees...", "");
     let sig = await h.sendIxs(instructions);
     logTx("Initialize", sig);
     logInfo("Pool address:", poolAddress.toBase58());
+    logExplorer("View on Solscan:", poolAddress.toBase58());
 
     // Load the pool object — on a live network: await Hadron.load(connection, poolAddress)
     const pool = await h.loadPool(poolAddress);
@@ -86,7 +89,7 @@ describe("Initialize pool with price and risk curves", () => {
     //    Ask amountIn values are scaled by midprice for symmetric
     //    USD depth: e.g. 500 base-equiv = 500 * 150 = 75,000 Y.
     // ---------------------------------------------------------------
-    logHeader("Set price curves");
+    logHeader("Step 2 — Set price curves (bid + ask, 11 points each)");
     sig = await h.sendIx(
       pool.setCurve(authority.publicKey, {
         side: Side.Bid,
@@ -143,7 +146,7 @@ describe("Initialize pool with price and risk curves", () => {
     //    in parallel to attract rebalancing flow. At extremes, the
     //    spread also widens to protect against one-sided depletion.
     // ---------------------------------------------------------------
-    logHeader("Set risk curves");
+    logHeader("Step 3 — Set risk curves (bid + ask, 5 points each)");
     sig = await h.sendIx(
       pool.setRiskCurve(authority.publicKey, {
         side: Side.Bid,
@@ -181,7 +184,7 @@ describe("Initialize pool with price and risk curves", () => {
     // ---------------------------------------------------------------
     // 5. Deposit liquidity
     // ---------------------------------------------------------------
-    logHeader("Deposit liquidity");
+    logHeader("Step 4 — Deposit liquidity");
     await h.createAta(pool.addresses.config, mintX.publicKey);
     await h.createAta(pool.addresses.config, mintY.publicKey);
 
@@ -205,7 +208,7 @@ describe("Initialize pool with price and risk curves", () => {
     // 6. Update the midprice oracle
     //    The authority can push price updates at any time.
     // ---------------------------------------------------------------
-    logHeader("Update midprice oracle");
+    logHeader("Step 5 — Update midprice oracle");
     sig = await h.sendIx(
       pool.updateMidprice(authority.publicKey, {
         midpriceQ32: toQ32(152.5),
@@ -220,7 +223,7 @@ describe("Initialize pool with price and risk curves", () => {
     //    Other tests use the most recent entry.
     //    Authority keypair is saved as a separate file.
     // ---------------------------------------------------------------
-    logHeader("Save pool config");
+    logHeader("Step 6 — Save pool config to output/");
     const outputDir = path.resolve(__dirname, "../../output");
     if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
@@ -251,5 +254,9 @@ describe("Initialize pool with price and risk curves", () => {
 
     logHeader("Pool is live and ready for swaps!");
     logInfo("Pool address:", pool.poolAddress.toBase58());
+    logExplorer("View on Solscan:", pool.poolAddress.toBase58());
+    logInfo("Next steps:", "npm run read         — inspect pool state");
+    logInfo("", "             npm run write        — update midprice, curves, swap");
+    logInfo("", "             npm run depth-curves — visualize depth curves");
   });
 });

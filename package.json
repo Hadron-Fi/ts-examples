@@ -2,6 +2,7 @@
   "name": "hadron-examples",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Hadron AMM SDK usage examples",
   "scripts": {
     "init": "vitest run src/quickstart/01-initialize-pool.test.ts",

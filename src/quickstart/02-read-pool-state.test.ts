@@ -20,7 +20,7 @@ import {
   CurveXMode,
   type CurveSide,
 } from "@hadron-fi/sdk";
-import { TestHarness, logInfo, logHeader } from "../setup";
+import { TestHarness, logInfo, logHeader, logExplorer } from "../setup";
 import fs from "fs";
 import path from "path";
 
@@ -47,17 +47,25 @@ describe("Read pool state", () => {
     // ------------------------------------------------------------------
     // Load pool config from test 01 output
     // ------------------------------------------------------------------
-    const configPath = path.resolve(__dirname, "../../output/pool-config.json");
-    if (!fs.existsSync(configPath)) {
-      throw new Error(
-        "output/pool-config.json not found. Run test 01 on devnet first:\n" +
-        "  npm run init"
-      );
+    // Accept a pool address via POOL env var, otherwise use the latest from pool-config.json
+    // Usage: POOL=<address> npm run read
+    let poolAddress: PublicKey;
+    if (process.env.POOL) {
+      poolAddress = new PublicKey(process.env.POOL);
+    } else {
+      const configPath = path.resolve(__dirname, "../../output/pool-config.json");
+      if (!fs.existsSync(configPath)) {
+        throw new Error(
+          "output/pool-config.json not found. Run test 01 on devnet first:\n" +
+          "  npm run init\n" +
+          "Or pass a pool address directly:\n" +
+          "  POOL=<address> npm run read"
+        );
+      }
+      const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
+      const poolJson = Array.isArray(raw) ? raw[raw.length - 1] : raw;
+      poolAddress = new PublicKey(poolJson.poolAddress);
     }
-
-    const raw = JSON.parse(fs.readFileSync(configPath, "utf-8"));
-    const poolJson = Array.isArray(raw) ? raw[raw.length - 1] : raw;
-    const poolAddress = new PublicKey(poolJson.poolAddress);
 
     const h = new TestHarness();
 
@@ -72,6 +80,7 @@ describe("Read pool state", () => {
     // ------------------------------------------------------------------
     logHeader("Pool Info");
     logInfo("Address:", poolAddress.toBase58());
+    logExplorer("Solscan:", poolAddress.toBase58());
     logInfo("Authority:", pool.config.authority.toBase58());
     logInfo("Mint X:", pool.config.mintX.toBase58());
     logInfo("Mint Y:", pool.config.mintY.toBase58());
