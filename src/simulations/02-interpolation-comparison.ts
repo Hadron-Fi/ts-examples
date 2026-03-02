@@ -264,96 +264,156 @@ interface ModeResult {
   bid: DepthPoint[];
 }
 
+// ============================================================================
+// SVM factory — creates a fresh instance per mode to avoid memory accumulation
+// ============================================================================
+
+interface SvmEnv {
+  svm: LiteSVM;
+  payer: Keypair;
+  mintX: PublicKey;
+  mintY: PublicKey;
+  payerAtaX: PublicKey;
+  payerAtaY: PublicKey;
+  feeRecipient: PublicKey;
+}
+
+function createSvmEnv(
+  feeConfigPda: PublicKey,
+  feeConfigLamports: number,
+  feeConfigData: Buffer,
+  feeRecipient: PublicKey,
+): SvmEnv {
+  const svm = LiteSVM.default()
+    .withFeatureSet(FeatureSet.allEnabled())
+    .withSigverify(false)
+    .withBuiltins()
+    .withSysvars()
+    .withDefaultPrograms()
+    .withLamports(1_000_000_000_000_000n);
+
+  svm.addProgramFromFile(PROGRAM_ID, PROGRAM_PATH);
+
+  const payer = Keypair.generate();
+  svm.airdrop(payer.publicKey, 100_000_000_000_000n);
+
+  const mintX = Keypair.generate();
+  const mintY = Keypair.generate();
+  createMintInSvm(svm, payer, mintX, DECIMALS_X);
+  createMintInSvm(svm, payer, mintY, DECIMALS_Y);
+
+  svm.setAccount(feeConfigPda, {
+    lamports: BigInt(feeConfigLamports),
+    data: Buffer.from(feeConfigData),
+    owner: HADRON_PROGRAM_ID,
+    executable: false,
+  });
+  svm.airdrop(feeRecipient, 1_000_000_000n);
+
+  // Inject token accounts directly — bypasses SPL Token/ATA BPF execution
+  // which crashes on some x86 litesvm builds (std::bad_alloc in BPF JIT)
+  const largeBalance = 1_000_000_000_000_000n;
+  injectTokenAccount(svm, mintX.publicKey, feeRecipient, 0n);
+  injectTokenAccount(svm, mintY.publicKey, feeRecipient, 0n);
+  const payerAtaX = injectTokenAccount(svm, mintX.publicKey, payer.publicKey, largeBalance);
+  const payerAtaY = injectTokenAccount(svm, mintY.publicKey, payer.publicKey, largeBalance);
+
+  return { svm, payer, mintX: mintX.publicKey, mintY: mintY.publicKey, payerAtaX, payerAtaY, feeRecipient };
+}
+
+// ============================================================================
+// Per-mode data collection — fresh SVM per mode to keep memory bounded
+// ============================================================================
+
 let seedCounter = 0n;
 
 function collectModeBidDepth(
-  svm: LiteSVM,
-  payer: Keypair,
-  mintX: PublicKey,
-  mintY: PublicKey,
-  payerAtaY: PublicKey,
+  feeConfigPda: PublicKey,
+  feeConfigLamports: number,
+  feeConfigData: Buffer,
   feeRecipient: PublicKey,
   mode: InterpMode
 ): ModeResult {
+  const env = createSvmEnv(feeConfigPda, feeConfigLamports, feeConfigData, feeRecipient);
   const bid: DepthPoint[] = [];
 
   for (let p = 1; p <= PROBE_POINTS; p++) {
     const volume = (BID_MAX_VOLUME * p) / PROBE_POINTS;
 
-    seedCounter++;
-    const { instructions, poolAddress } = Hadron.initialize(payer.publicKey, {
-      seed: seedCounter,
-      mintX,
-      mintY,
-      authority: payer.publicKey,
-      initialMidpriceQ32: toQ32(MIDPRICE),
-    });
-    sendTx(svm, payer, instructions);
-
-    const pool = loadPoolFromSvm(svm, poolAddress);
-
-    // Set price curves
-    sendTx(svm, payer, [
-      pool.setCurve(payer.publicKey, {
-        side: Side.Bid,
-        defaultInterpolation: mode.interpolation,
-        slot: 0,
-        points: BID_POINTS.map((pt) => ({
-          amountIn: humanToAtoms(pt.volume, DECIMALS_X),
-          priceFactor: pt.priceFactor,
-          params: mode.params,
-        })),
-      }),
-      pool.setCurve(payer.publicKey, {
-        side: Side.Ask,
-        defaultInterpolation: Interpolation.Linear,
-        slot: 0,
-        points: ASK_POINTS.map((pt) => ({
-          amountIn: humanToAtoms(pt.volume, DECIMALS_Y),
-          priceFactor: pt.priceFactor,
-        })),
-      }),
-    ]);
-
-    // Set risk curves (Linear for all)
-    sendTx(svm, payer, [
-      pool.setRiskCurve(payer.publicKey, {
-        side: Side.Bid,
-        defaultInterpolation: Interpolation.Linear,
-        slot: 0,
-        points: RISK_POINTS_BID,
-      }),
-      pool.setRiskCurve(payer.publicKey, {
-        side: Side.Ask,
-        defaultInterpolation: Interpolation.Linear,
-        slot: 0,
-        points: RISK_POINTS_ASK,
-      }),
-    ]);
-
-    // Deposit — inject vault ATAs directly (bypasses SPL Token BPF)
-    injectTokenAccount(svm, mintX, pool.addresses.config, 0n);
-    injectTokenAccount(svm, mintY, pool.addresses.config, 0n);
-    sendTx(svm, payer, [
-      pool.deposit(payer.publicKey, {
-        amountX: humanToAtoms(DEPOSIT_X, DECIMALS_X),
-        amountY: humanToAtoms(DEPOSIT_Y, DECIMALS_Y),
-      }),
-    ]);
-
-    // Bid probe: sell X → Y
     try {
+      seedCounter++;
+      const { instructions, poolAddress } = Hadron.initialize(env.payer.publicKey, {
+        seed: seedCounter,
+        mintX: env.mintX,
+        mintY: env.mintY,
+        authority: env.payer.publicKey,
+        initialMidpriceQ32: toQ32(MIDPRICE),
+      });
+      sendTx(env.svm, env.payer, instructions);
+
+      const pool = loadPoolFromSvm(env.svm, poolAddress);
+
+      // Set price curves
+      sendTx(env.svm, env.payer, [
+        pool.setCurve(env.payer.publicKey, {
+          side: Side.Bid,
+          defaultInterpolation: mode.interpolation,
+          slot: 0,
+          points: BID_POINTS.map((pt) => ({
+            amountIn: humanToAtoms(pt.volume, DECIMALS_X),
+            priceFactor: pt.priceFactor,
+            params: mode.params,
+          })),
+        }),
+        pool.setCurve(env.payer.publicKey, {
+          side: Side.Ask,
+          defaultInterpolation: Interpolation.Linear,
+          slot: 0,
+          points: ASK_POINTS.map((pt) => ({
+            amountIn: humanToAtoms(pt.volume, DECIMALS_Y),
+            priceFactor: pt.priceFactor,
+          })),
+        }),
+      ]);
+
+      // Set risk curves (Linear for all)
+      sendTx(env.svm, env.payer, [
+        pool.setRiskCurve(env.payer.publicKey, {
+          side: Side.Bid,
+          defaultInterpolation: Interpolation.Linear,
+          slot: 0,
+          points: RISK_POINTS_BID,
+        }),
+        pool.setRiskCurve(env.payer.publicKey, {
+          side: Side.Ask,
+          defaultInterpolation: Interpolation.Linear,
+          slot: 0,
+          points: RISK_POINTS_ASK,
+        }),
+      ]);
+
+      // Deposit — inject vault ATAs directly (bypasses SPL Token BPF)
+      injectTokenAccount(env.svm, env.mintX, pool.addresses.config, 0n);
+      injectTokenAccount(env.svm, env.mintY, pool.addresses.config, 0n);
+      sendTx(env.svm, env.payer, [
+        pool.deposit(env.payer.publicKey, {
+          amountX: humanToAtoms(DEPOSIT_X, DECIMALS_X),
+          amountY: humanToAtoms(DEPOSIT_Y, DECIMALS_Y),
+        }),
+      ]);
+
+      // Bid probe: sell X → Y
       const amountIn = humanToAtoms(volume, DECIMALS_X);
-      const beforeY = getTokenBalance(svm, payerAtaY);
-      sendTx(svm, payer, [
-        pool.swap(payer.publicKey, {
+      const beforeY = getTokenBalance(env.svm, env.payerAtaY);
+      sendTx(env.svm, env.payer, [
+        pool.swap(env.payer.publicKey, {
           isX: true,
           amountIn,
           minOut: 0n,
-          feeRecipient,
+          feeRecipient: env.feeRecipient,
         }),
       ]);
-      const afterY = getTokenBalance(svm, payerAtaY);
+      const afterY = getTokenBalance(env.svm, env.payerAtaY);
       const outH = atomsToHuman(afterY - beforeY, DECIMALS_Y);
       if (outH > 0) bid.push({ price: outH / volume, cumVolume: volume });
     } catch { /* skip failed probes */ }
@@ -512,52 +572,16 @@ function generateInterpHtml(
   const feeConfigData = Buffer.from(cache.feeConfigData, "base64");
   const feeRecipient = new PublicKey(cache.feeRecipient);
 
-  logHeader("Setting up LiteSVM");
-
-  const svm = LiteSVM.default()
-    .withFeatureSet(FeatureSet.allEnabled())
-    .withSigverify(false)
-    .withBuiltins()
-    .withSysvars()
-    .withDefaultPrograms()
-    .withLamports(1_000_000_000_000_000n);
-
-  svm.addProgramFromFile(PROGRAM_ID, PROGRAM_PATH);
-
-  const payer = Keypair.generate();
-  svm.airdrop(payer.publicKey, 100_000_000_000_000n);
-
-  const mintX = Keypair.generate();
-  const mintY = Keypair.generate();
-  createMintInSvm(svm, payer, mintX, DECIMALS_X);
-  createMintInSvm(svm, payer, mintY, DECIMALS_Y);
-
-  // Inject fee config from cache
-  svm.setAccount(feeConfigPda, {
-    lamports: BigInt(cache.feeConfigLamports),
-    data: feeConfigData,
-    owner: HADRON_PROGRAM_ID,
-    executable: false,
-  });
-  svm.airdrop(feeRecipient, 1_000_000_000n);
-
-  // Inject token accounts directly — bypasses SPL Token/ATA BPF execution
-  const largeBalance = 1_000_000_000_000_000n;
-  injectTokenAccount(svm, mintX.publicKey, feeRecipient, 0n);
-  injectTokenAccount(svm, mintY.publicKey, feeRecipient, 0n);
-  const payerAtaX = injectTokenAccount(svm, mintX.publicKey, payer.publicKey, largeBalance);
-  const payerAtaY = injectTokenAccount(svm, mintY.publicKey, payer.publicKey, largeBalance);
-
   // -----------------------------------------------------------------
-  // Collect bid depth data for each mode
+  // Collect bid depth data for each mode (fresh SVM per mode)
   // -----------------------------------------------------------------
   const modeResults: ModeResult[] = [];
 
   for (const mode of MODES) {
     logHeader(`Probing: ${mode.name}`);
     const result = collectModeBidDepth(
-      svm, payer, mintX.publicKey, mintY.publicKey,
-      payerAtaY, feeRecipient, mode
+      feeConfigPda, cache.feeConfigLamports, feeConfigData,
+      feeRecipient, mode
     );
     logInfo("Bid points:", String(result.bid.length));
     modeResults.push(result);
