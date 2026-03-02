@@ -77,7 +77,7 @@ pub fn load_pool_config() -> PoolConfigEntry {
     let data = fs::read_to_string(&config_path).unwrap_or_else(|_| {
         panic!(
             "output/pool-config.json not found at {}.\n\
-             Run init-pool first: cargo run --bin init-pool",
+             Run init-pool first: cargo run --bin init",
             config_path.display()
         )
     });

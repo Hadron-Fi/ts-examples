@@ -70,15 +70,15 @@ Run in order — each step builds on the previous one.
 
 | Step | TypeScript | Rust |
 |------|-----------|------|
-| Create pool | `npm run init` | `cargo run --bin init-pool` |
-| Read state | `npm run read` | `cargo run --bin read-pool` |
-| Update & swap | `npm run write` | `cargo run --bin write-pool` |
+| Create pool | `npm run init` | `cargo run --bin init` |
+| Read state | `npm run read` | `cargo run --bin read` |
+| Update & swap | `npm run write` | `cargo run --bin write` |
 | Spread triggers | `npm run spread` | `cargo run --bin spread-config` |
 | Delta staleness | `npm run delta-staleness` | `cargo run --bin delta-staleness` |
 | Depth curves | `npm run depth-curves` | — |
 | Interpolation modes | `npm run interp` | — |
 
-Point at a specific pool: `POOL=<address> npm run read` or `POOL=<address> cargo run --bin read-pool`
+Point at a specific pool: `POOL=<address> npm run read` or `POOL=<address> cargo run --bin read`
 
 ## Output Files
 

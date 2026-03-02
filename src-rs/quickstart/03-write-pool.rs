@@ -11,8 +11,8 @@
 ///   5. Swap — pending curve updates are applied during the swap
 ///
 /// Run:
-///   cargo run --bin write-pool
-///   POOL=<address> cargo run --bin write-pool
+///   cargo run --bin write
+///   POOL=<address> cargo run --bin write
 #[allow(dead_code, deprecated)]
 #[path = "../setup.rs"]
 mod setup;

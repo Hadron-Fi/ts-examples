@@ -5,15 +5,15 @@ edition = "2021"
 description = "Rust examples for the Hadron AMM SDK"
 
 [[bin]]
-name = "init-pool"
+name = "init"
 path = "src-rs/quickstart/01-init-pool.rs"
 
 [[bin]]
-name = "read-pool"
+name = "read"
 path = "src-rs/quickstart/02-read-pool.rs"
 
 [[bin]]
-name = "write-pool"
+name = "write"
 path = "src-rs/quickstart/03-write-pool.rs"
 
 [[bin]]

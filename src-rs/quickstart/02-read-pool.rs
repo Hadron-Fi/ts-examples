@@ -8,8 +8,8 @@
 ///   Run the TypeScript init script first: npm run init
 ///
 /// Run:
-///   cargo run --bin read-pool
-///   POOL=<address> cargo run --bin read-pool
+///   cargo run --bin read
+///   POOL=<address> cargo run --bin read
 #[allow(dead_code, deprecated)]
 #[path = "../setup.rs"]
 mod setup;

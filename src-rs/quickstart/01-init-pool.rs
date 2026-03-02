@@ -10,7 +10,7 @@
 ///   7. Save pool config to output/
 ///
 /// Run:
-///   cargo run --bin init-pool
+///   cargo run --bin init
 #[allow(dead_code, deprecated)]
 #[path = "../setup.rs"]
 mod setup;
@@ -254,7 +254,7 @@ fn main() {
     log_header("Pool is live and ready for swaps!");
     log_info("Pool address:", &pool_address.to_string());
     log_explorer("View on Solscan:", &pool_address.to_string());
-    log_info("Next steps:", "cargo run --bin read-pool     — inspect pool state");
-    log_info("", "             cargo run --bin write-pool    — update midprice, curves, swap");
+    log_info("Next steps:", "cargo run --bin read     — inspect pool state");
+    log_info("", "             cargo run --bin write    — update midprice, curves, swap");
     log_info("", "             cargo run --bin spread-config — configure spread triggers");
 }
