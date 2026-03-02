@@ -9,6 +9,7 @@
     "read": "tsx src/quickstart/02-read-pool-state.ts",
     "write": "tsx src/quickstart/03-write-pool-updates.ts",
     "spread": "tsx src/quickstart/04-spread-config.ts",
+    "fetch-cache": "tsx src/simulations/fetch-sim-cache.ts",
     "depth-curves": "tsx src/simulations/01-depth-curves.ts",
     "interp": "tsx src/simulations/02-interpolation-comparison.ts"
   },
