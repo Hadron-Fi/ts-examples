@@ -16,7 +16,6 @@
  */
 import { LiteSVM, FeatureSet } from "litesvm";
 import {
-  Connection,
   Keypair,
   PublicKey,
   Transaction,
@@ -30,11 +29,8 @@ import {
 import {
   Hadron,
   toQ32,
-  fromQ32,
   Interpolation,
   Side,
-  getFeeConfigAddress,
-  decodeFeeConfig,
   decodeConfig,
   decodeMidpriceOracle,
   decodeCurveMeta,
@@ -472,106 +468,31 @@ function collectRiskData(
 
 (async () => {
   // ------------------------------------------------------------------
-  // Load pool + fee config (from cache or devnet)
+  // Load pool + fee config from cache (auto-fetch via subprocess if missing)
   // ------------------------------------------------------------------
   const cachePath = path.resolve(__dirname, "../../output/sim-cache.json");
-  let config: PoolConfig;
-  let feeConfigPda: PublicKey;
-  let feeConfigData: { lamports: number; data: Buffer };
-  let feeRecipient: PublicKey;
 
-  if (fs.existsSync(cachePath)) {
-    // Use cached data — no devnet connection needed
-    logHeader("Loading from cache");
-    const cache = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
-    config = cache.config;
-    feeConfigPda = new PublicKey(cache.feeConfigPda);
-    feeConfigData = { lamports: cache.feeConfigLamports, data: Buffer.from(cache.feeConfigData, "base64") };
-    feeRecipient = new PublicKey(cache.feeRecipient);
-    logInfo("Midprice:", config.midprice.toFixed(4));
-  } else {
-    // Fetch from devnet and cache for next run
-    const poolConfigPath = path.resolve(__dirname, "../../output/pool-config.json");
-    if (!fs.existsSync(poolConfigPath)) {
-      throw new Error(
-        "output/pool-config.json not found. Run 'npm run init' first."
-      );
-    }
-
-    const raw = JSON.parse(fs.readFileSync(poolConfigPath, "utf-8"));
-    const poolJson = Array.isArray(raw) ? raw[raw.length - 1] : raw;
-    const poolAddress = new PublicKey(poolJson.poolAddress);
-
-    const rpcUrl = process.env.RPC_URL || "https://api.devnet.solana.com";
-    const devnetConn = new Connection(rpcUrl, "confirmed");
-
-    logHeader("Loading pool from devnet");
-    logInfo("Pool:", poolAddress.toBase58());
-
-    const devnetPool = await Hadron.load(devnetConn, poolAddress);
-    const midprice = devnetPool.getMidprice();
-    const curves = devnetPool.getActiveCurves();
-
-    config = {
-      midprice,
-      decimalsX: 6,
-      decimalsY: 6,
-      totalValueUsd: midprice * 10_000,
-      priceCurves: {
-        bid: {
-          points: curves.priceBid.points.map((pt) => ({
-            volume: Number(pt.amountIn) / 1e6,
-            priceFactor: fromQ32(pt.priceFactorQ32),
-          })),
-        },
-        ask: {
-          points: curves.priceAsk.points.map((pt) => ({
-            volume: Number(pt.amountIn) / 1e6,
-            priceFactor: fromQ32(pt.priceFactorQ32),
-          })),
-        },
-      },
-      riskCurves: {
-        bid: {
-          points: curves.riskBid.points.map((pt) => ({
-            pctBase: fromQ32(pt.amountIn),
-            priceFactor: fromQ32(pt.priceFactorQ32),
-          })),
-        },
-        ask: {
-          points: curves.riskAsk.points.map((pt) => ({
-            pctBase: fromQ32(pt.amountIn),
-            priceFactor: fromQ32(pt.priceFactorQ32),
-          })),
-        },
-      },
-    };
-
-    const [pda] = getFeeConfigAddress();
-    feeConfigPda = pda;
-    const feeConfigAcct = await devnetConn.getAccountInfo(feeConfigPda);
-    if (!feeConfigAcct) throw new Error("Fee config not found on devnet");
-    feeConfigData = { lamports: feeConfigAcct.lamports, data: Buffer.from(feeConfigAcct.data) };
-    feeRecipient = decodeFeeConfig(feeConfigAcct.data).feeRecipient;
-
-    logInfo("Midprice:", midprice.toFixed(4));
-    logInfo("Price Bid:", `${curves.priceBid.numPoints} points`);
-    logInfo("Price Ask:", `${curves.priceAsk.numPoints} points`);
-    logInfo("Risk Bid:", `${curves.riskBid.numPoints} points`);
-    logInfo("Risk Ask:", `${curves.riskAsk.numPoints} points`);
-
-    // Cache for future runs (avoids devnet connection)
-    const cacheDir = path.resolve(__dirname, "../../output");
-    if (!fs.existsSync(cacheDir)) fs.mkdirSync(cacheDir, { recursive: true });
-    fs.writeFileSync(cachePath, JSON.stringify({
-      config,
-      feeConfigPda: feeConfigPda.toBase58(),
-      feeConfigLamports: feeConfigAcct.lamports,
-      feeConfigData: Buffer.from(feeConfigAcct.data).toString("base64"),
-      feeRecipient: feeRecipient.toBase58(),
-    }));
-    logInfo("Cached:", "output/sim-cache.json");
+  if (!fs.existsSync(cachePath)) {
+    logHeader("Fetching pool data from devnet");
+    const fetchScript = path.resolve(__dirname, "fetch-sim-cache.ts");
+    const { execFileSync } = await import("child_process");
+    execFileSync("npx", ["tsx", fetchScript], {
+      stdio: "inherit",
+      env: process.env,
+    });
   }
+
+  if (!fs.existsSync(cachePath)) {
+    throw new Error("Failed to create sim-cache.json. Check devnet connection.");
+  }
+
+  const cache = JSON.parse(fs.readFileSync(cachePath, "utf-8"));
+  const config: PoolConfig = cache.config;
+  const feeConfigPda = new PublicKey(cache.feeConfigPda);
+  const feeConfigData = { lamports: cache.feeConfigLamports, data: Buffer.from(cache.feeConfigData, "base64") };
+  const feeRecipient = new PublicKey(cache.feeRecipient);
+  logHeader("Loaded pool config");
+  logInfo("Midprice:", config.midprice.toFixed(4));
 
   // ---------------------------------------------------------------
   // Simulation parameters
