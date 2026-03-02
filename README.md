@@ -1,7 +1,7 @@
 # Hadron Guide
 
 
-End-to-end examples for the [Hadron AMM](https://hadron.fi) SDK on Solana. This repo ships a precompiled Hadron program binary (`programs/hadron.so`), a set of scripts that create a fully configured pool on devnet, and simulations that visualize depth curves and interpolation modes locally via LiteSVM. Try running the commands in order.
+End-to-end examples for the [Hadron AMM](https://hadron.fi) SDK on Solana. Create a fully configured pool on devnet, inspect and update it, then simulate and visualize depth curves locally via LiteSVM. Try running the commands in order.
 ```
 npm run init          Create pool on devnet (mints, curves, deposit)
       │                  ↳ saves pool address to output/pool-config.json
