@@ -94,12 +94,17 @@ async function main() {
   const payerAtaY = createAta(svm, payer, payer.publicKey, mintY.publicKey);
   logMem("atas created");
 
-  console.log("F. Mint tokens");
+  console.log("F1. Mint X tokens");
   sendTx(svm, payer, [
     createMintToInstruction(mintX.publicKey, payerAtaX, payer.publicKey, 100_000_000_000n),
+  ]);
+  logMem("minted X");
+
+  console.log("F2. Mint Y tokens");
+  sendTx(svm, payer, [
     createMintToInstruction(mintY.publicKey, payerAtaY, payer.publicKey, 100_000_000_000_000n),
   ]);
-  logMem("minted");
+  logMem("minted Y");
 
   console.log("G. Initialize pool");
   const { instructions, poolAddress } = Hadron.initialize(payer.publicKey, {
